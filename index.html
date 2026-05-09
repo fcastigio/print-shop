@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Print Shop">
+<meta name="theme-color" content="#3B82F6">
+<title>Print Shop</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%233B82F6'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='110'>🖨️</text></svg>">
+<style>
+  html, body { margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; -webkit-overflow-scrolling: touch; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overscroll-behavior-y: none; }
+  input, textarea, button { font-family: inherit; }
+  .loading-screen { display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; gap: 14px; color: #64748b; font-weight: 600; background: #f8fafc; }
+  .spinner { width: 36px; height: 36px; border: 4px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes bounce-in { 0% { transform: scale(0.5); opacity: 0; } 60% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+  .animate-bounce-in { animation: bounce-in 0.4s ease-out; }
+  @keyframes slide-up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .animate-slide-up { animation: slide-up 0.25s ease-out; }
+</style>
+</head>
+<body class="bg-slate-50">
+<div id="root">
+  <div class="loading-screen">
+    <div class="spinner"></div>
+    <div>Loading Print Shop…</div>
+  </div>
+</div>
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useRef } = React;
+
+// ===== STORAGE =====
+const store = {
+  get: (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { console.error('Save failed', e); return false; } }
+};
+
+// ===== ICONS =====
+const Icon = ({ className = "w-5 h-5", strokeWidth = 2, children }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
+);
+const ShoppingCart = (p) => <Icon {...p}><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></Icon>;
+const Package = (p) => <Icon {...p}><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></Icon>;
+const Layers = (p) => <Icon {...p}><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></Icon>;
+const Wallet = (p) => <Icon {...p}><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></Icon>;
+const SettingsIcon = (p) => <Icon {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></Icon>;
+const Plus = (p) => <Icon {...p}><path d="M5 12h14"/><path d="M12 5v14"/></Icon>;
+const Minus = (p) => <Icon {...p}><path d="M5 12h14"/></Icon>;
+const X = (p) => <Icon {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></Icon>;
+const Check = (p) => <Icon {...p}><path d="M20 6 9 17l-5-5"/></Icon>;
+const Trash2 = (p) => <Icon {...p}><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></Icon>;
+const Pencil = (p) => <Icon {...p}><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></Icon>;
+const Camera = (p) => <Icon {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></Icon>;
+const AlertTriangle = (p) => <Icon {...p}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></Icon>;
+const Printer = (p) => <Icon {...p}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></Icon>;
+const RefreshCw = (p) => <Icon {...p}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></Icon>;
+const Sparkles = (p) => <Icon {...p}><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></Icon>;
+const Receipt = (p) => <Icon {...p}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></Icon>;
+const TrendingUp = (p) => <Icon {...p}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></Icon>;
+const TrendingDown = (p) => <Icon {...p}><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></Icon>;
+const Boxes = (p) => <Icon {...p}><path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z"/><path d="m7 16.5-4.74-2.85"/><path d="m7 16.5 5-3"/><path d="M7 16.5v5.17"/><path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z"/></Icon>;
+const Wand2 = (p) => <Icon {...p}><path d="M21.64 3.64a1.35 1.35 0 0 0-1.91 0L2.74 20.64a1.35 1.35 0 0 0 1.91 1.91L21.64 5.55a1.35 1.35 0 0 0 0-1.91Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></Icon>;
+
+// ===== CONSTANTS =====
+const STORAGE_KEY = 'print_shop_v2';
+const FILAMENT_TYPES = ['PLA', 'PLA Matte', 'PLA Silk', 'PETG', 'TPU', 'ABS', 'Other'];
+const COLOR_PRESETS = ['#F9FAFB','#1F2937','#3B82F6','#6B7280','#F97316','#DC2626','#10B981','#A855F7','#EC4899','#EAB308','#38BDF8','#84CC16'];
+
+const SEED_FILAMENTS = [
+  { name: 'PLA Basic Blue', brand: 'Bambu Lab', type: 'PLA', colorHex: '#1A5FB4', spoolSizeG: 1000, currentG: 1000, costPerSpool: 15 },
+  { name: 'PLA Basic Black', brand: 'Bambu Lab', type: 'PLA', colorHex: '#1A1A1A', spoolSizeG: 2000, currentG: 2000, costPerSpool: 30 },
+  { name: 'PLA Basic Jade White', brand: 'Bambu Lab', type: 'PLA', colorHex: '#F0EDE5', spoolSizeG: 2000, currentG: 2000, costPerSpool: 30 },
+  { name: 'PLA Basic Gray', brand: 'Bambu Lab', type: 'PLA', colorHex: '#808080', spoolSizeG: 1000, currentG: 1000, costPerSpool: 15 },
+  { name: 'PLA Basic Pumpkin Orange', brand: 'Bambu Lab', type: 'PLA', colorHex: '#E8751A', spoolSizeG: 1000, currentG: 1000, costPerSpool: 15 },
+  { name: 'PLA Basic Turquoise', brand: 'Bambu Lab', type: 'PLA', colorHex: '#40E0D0', spoolSizeG: 1000, currentG: 1000, costPerSpool: 13 },
+  { name: 'PLA Basic Indigo Purple', brand: 'Bambu Lab', type: 'PLA', colorHex: '#4B0082', spoolSizeG: 1000, currentG: 1000, costPerSpool: 15 },
+  { name: 'PLA Basic Mistletoe Green', brand: 'Bambu Lab', type: 'PLA', colorHex: '#2D6A4F', spoolSizeG: 2000, currentG: 2000, costPerSpool: 28 },
+  { name: 'PLA Basic Sunflower Yellow', brand: 'Bambu Lab', type: 'PLA', colorHex: '#FFD700', spoolSizeG: 1000, currentG: 1000, costPerSpool: 15 },
+  { name: 'PLA Basic Cyan', brand: 'Bambu Lab', type: 'PLA', colorHex: '#00BCD4', spoolSizeG: 1000, currentG: 1000, costPerSpool: 13 },
+  { name: 'PLA Basic Blue Grey', brand: 'Bambu Lab', type: 'PLA', colorHex: '#607D8B', spoolSizeG: 1000, currentG: 1000, costPerSpool: 13 },
+  { name: 'PLA Basic Bright Green', brand: 'Bambu Lab', type: 'PLA', colorHex: '#7CB342', spoolSizeG: 1000, currentG: 1000, costPerSpool: 13 },
+  { name: 'PLA Basic Silver', brand: 'Bambu Lab', type: 'PLA', colorHex: '#C0C0C0', spoolSizeG: 1000, currentG: 1000, costPerSpool: 13 },
+  { name: 'PLA Matte Scarlet Red', brand: 'Bambu Lab', type: 'PLA Matte', colorHex: '#C0392B', spoolSizeG: 1000, currentG: 1000, costPerSpool: 15 },
+  { name: 'PLA Silk+ Blue', brand: 'Bambu Lab', type: 'PLA Silk', colorHex: '#4169E1', spoolSizeG: 1000, currentG: 1000, costPerSpool: 15 },
+  { name: 'PLA Silk+ Candy Green', brand: 'Bambu Lab', type: 'PLA Silk', colorHex: '#00C9A7', spoolSizeG: 1000, currentG: 1000, costPerSpool: 15 },
+  { name: 'PLA Silk+ Gold', brand: 'Bambu Lab', type: 'PLA Silk', colorHex: '#DAA520', spoolSizeG: 1000, currentG: 1000, costPerSpool: 15 },
+  { name: 'PETG Basic White', brand: 'Bambu Lab', type: 'PETG', colorHex: '#F5F5F5', spoolSizeG: 1000, currentG: 1000, costPerSpool: 15 },
+  { name: 'PETG Orange', brand: 'Creality', type: 'PETG', colorHex: '#FF6D00', spoolSizeG: 1000, currentG: 1000, costPerSpool: 19 },
+  { name: 'PETG Black', brand: 'Creality', type: 'PETG', colorHex: '#1A1A1A', spoolSizeG: 1000, currentG: 1000, costPerSpool: 19 },
+  { name: 'TPU 95A Luminous Blue', brand: 'Overture', type: 'TPU', colorHex: '#00B0FF', spoolSizeG: 1000, currentG: 1000, costPerSpool: 26 },
+  { name: 'PLA Basic Brown', brand: 'eSUN', type: 'PLA', colorHex: '#8B6914', spoolSizeG: 1000, currentG: 1000, costPerSpool: 19 },
+  { name: 'PLA+ Green', brand: 'eSUN', type: 'PLA', colorHex: '#2E7D32', spoolSizeG: 1000, currentG: 1000, costPerSpool: 19 },
+  { name: 'PLA Matte Beige', brand: 'ELEGOO', type: 'PLA Matte', colorHex: '#D4C5A9', spoolSizeG: 1000, currentG: 1000, costPerSpool: 18 },
+  { name: 'PLA Silk Silver', brand: 'GIANTARM', type: 'PLA Silk', colorHex: '#C0C0C0', spoolSizeG: 1000, currentG: 1000, costPerSpool: 20 },
+  { name: 'PLA Silk Tri-Color Purple/Blue', brand: 'GIANTARM', type: 'PLA Silk', colorHex: '#6A0DAD', spoolSizeG: 1000, currentG: 1000, costPerSpool: 20 },
+];
+
+const uid = (p) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+const fmt$ = (n) => `$${Math.round(n).toLocaleString()}`;
+const fmtG = (g) => `${Math.round(g)}g`;
+
+const createSeed = () => ({
+  filaments: SEED_FILAMENTS.map(f => ({ ...f, id: uid('fil') })),
+  products: [],
+  transactions: [],
+  settings: { shopName: "Cool 3D Prints", startingBalance: 0 }
+});
+
+const compressImg = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 500;
+      let w = img.width, h = img.height;
+      if (w > h && w > max) { h = (h * max) / w; w = max; }
+      else if (h > max) { w = (w * max) / h; h = max; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.78));
+    };
+    img.onerror = reject;
+    img.src = e.target.result;
+  };
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
+
+const isLight = (hex) => {
+  const c = hex.replace('#','');
+  const r = parseInt(c.substring(0,2), 16);
+  const g = parseInt(c.substring(2,4), 16);
+  const b = parseInt(c.substring(4,6), 16);
+  return (r*0.299 + g*0.587 + b*0.114) > 160;
+};
+
+// ===== UI PRIMITIVES =====
+function Modal({ open, onClose, title, children, maxW = 'max-w-lg', footer }) {
+  useEffect(() => {
+    if (open) document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm" onClick={onClose}>
+      <div className={`bg-white w-full ${maxW} rounded-t-3xl sm:rounded-3xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-slide-up`} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-slate-100 flex-shrink-0">
+          <h2 className="text-2xl font-bold text-slate-900">{title}</h2>
+          <button onClick={onClose} className="w-12 h-12 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
+            <X className="w-6 h-6 text-slate-700" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5">{children}</div>
+        {footer && <div className="p-5 border-t border-slate-100 flex-shrink-0 bg-slate-50">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+function Btn({ children, onClick, variant = 'primary', disabled, className = '', size = 'md', type='button' }) {
+  const base = "rounded-2xl font-bold transition-all active:scale-95 disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center gap-2 select-none";
+  const sizes = { sm: "px-4 py-2 text-sm", md: "px-5 py-3 text-base", lg: "px-6 py-4 text-lg", xl: "px-8 py-5 text-xl" };
+  const variants = {
+    primary: "bg-blue-500 hover:bg-blue-600 text-white shadow-md shadow-blue-500/20",
+    success: "bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20",
+    danger: "bg-red-500 hover:bg-red-600 text-white shadow-md shadow-red-500/20",
+    ghost: "bg-slate-100 hover:bg-slate-200 text-slate-700",
+    outline: "border-2 border-slate-200 hover:bg-slate-50 text-slate-700 bg-white"
+  };
+  return <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}>{children}</button>;
+}
+
+function Input({ label, value, onChange, type='text', placeholder, prefix, suffix, autoFocus, hint }) {
+  return (
+    <div className="mb-4">
+      {label && <label className="block text-sm font-semibold text-slate-700 mb-2">{label}</label>}
+      <div className="relative">
+        {prefix && <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-lg pointer-events-none">{prefix}</span>}
+        <input type={type} value={value ?? ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} autoFocus={autoFocus} inputMode={type === 'number' ? 'decimal' : undefined} className={`w-full px-4 py-3 text-lg border-2 border-slate-200 rounded-2xl focus:border-blue-500 focus:outline-none transition-colors ${prefix ? 'pl-10' : ''} ${suffix ? 'pr-12' : ''}`} />
+        {suffix && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold pointer-events-none">{suffix}</span>}
+      </div>
+      {hint && <p className="text-xs text-slate-500 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+function NumberStepper({ value, onChange, min = 0, max = 999 }) {
+  return (
+    <div className="flex items-center gap-3">
+      <button onClick={() => onChange(Math.max(min, value - 1))} className="w-14 h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 flex items-center justify-center transition-all">
+        <Minus className="w-6 h-6 text-slate-700" />
+      </button>
+      <div className="flex-1 text-center text-3xl font-bold text-slate-900 min-w-[60px]">{value}</div>
+      <button onClick={() => onChange(Math.min(max, value + 1))} className="w-14 h-14 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 flex items-center justify-center transition-all">
+        <Plus className="w-6 h-6 text-slate-700" />
+      </button>
+    </div>
+  );
+}
+
+function ProgressBar({ pct, color = '#3B82F6' }) {
+  const clamped = Math.min(100, Math.max(0, pct));
+  return (
+    <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${clamped}%`, backgroundColor: color }} />
+    </div>
+  );
+}
+
+function PhotoPicker({ photo, onChange }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    try {
+      const dataUrl = await compressImg(file);
+      onChange(dataUrl);
+    } catch (err) { alert('Could not load that photo. Try another!'); }
+    setBusy(false);
+    e.target.value = '';
+  };
+  return (
+    <div className="mb-4">
+      <label className="block text-sm font-semibold text-slate-700 mb-2">Photo</label>
+      <button type="button" onClick={() => inputRef.current?.click()} className="w-full aspect-square max-h-64 rounded-3xl border-4 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50 hover:bg-blue-50 transition-colors flex items-center justify-center overflow-hidden relative">
+        {photo ? <img src={photo} alt="" className="w-full h-full object-cover" /> : (
+          <div className="flex flex-col items-center gap-2 text-slate-400">
+            <Camera className="w-12 h-12" />
+            <span className="font-semibold">Tap to add a photo</span>
+          </div>
+        )}
+        {busy && <div className="absolute inset-0 bg-white/80 flex items-center justify-center"><RefreshCw className="w-8 h-8 animate-spin text-blue-500" /></div>}
+      </button>
+      <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+    </div>
+  );
+}
+
+// ===== SELL =====
+function SellScreen({ data, cart, setCart, onCheckout }) {
+  const cartItems = cart.map(c => { const p = data.products.find(x => x.id === c.productId); return p ? { ...p, qty: c.qty } : null; }).filter(Boolean);
+  const cartTotal = cartItems.reduce((s, i) => s + i.price * i.qty, 0);
+  const cartCount = cartItems.reduce((s, i) => s + i.qty, 0);
+  const addToCart = (productId) => {
+    const product = data.products.find(p => p.id === productId);
+    const inCart = cart.find(c => c.productId === productId)?.qty || 0;
+    if (inCart >= product.stock) return;
+    setCart(prev => {
+      const e = prev.find(c => c.productId === productId);
+      if (e) return prev.map(c => c.productId === productId ? { ...c, qty: c.qty + 1 } : c);
+      return [...prev, { productId, qty: 1 }];
+    });
+  };
+  if (data.products.length === 0) return (
+    <div className="flex flex-col items-center justify-center text-center py-20 px-6">
+      <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center mb-4"><Sparkles className="w-12 h-12 text-blue-500" /></div>
+      <h3 className="text-2xl font-bold text-slate-900 mb-2">No prints to sell yet!</h3>
+      <p className="text-slate-600 mb-6">Go to <b>My Prints</b> to add your first product.</p>
+    </div>
+  );
+  return (
+    <div className="p-4 pb-32">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {data.products.map(p => {
+          const inCart = cart.find(c => c.productId === p.id)?.qty || 0;
+          const soldOut = p.stock <= 0;
+          const reachedMax = inCart >= p.stock;
+          return (
+            <button key={p.id} onClick={() => !soldOut && !reachedMax && addToCart(p.id)} disabled={soldOut || reachedMax} className={`bg-white rounded-3xl shadow-sm border-2 overflow-hidden text-left transition-all active:scale-95 ${soldOut ? 'opacity-50' : reachedMax ? 'border-emerald-300' : 'border-transparent hover:border-blue-300 hover:shadow-md'}`}>
+              <div className="aspect-square bg-slate-100 relative">
+                {p.photo ? <img src={p.photo} alt={p.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-5xl">📦</div>}
+                {soldOut && <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center"><span className="bg-red-500 text-white font-bold px-3 py-1 rounded-full text-sm">SOLD OUT</span></div>}
+                {!soldOut && <div className="absolute top-2 right-2 bg-white/95 backdrop-blur rounded-full px-2.5 py-1 text-xs font-bold text-slate-700 shadow-sm">{p.stock} left</div>}
+                {inCart > 0 && <div className="absolute top-2 left-2 bg-emerald-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm shadow-lg">{inCart}</div>}
+              </div>
+              <div className="p-3">
+                <div className="font-bold text-slate-900 text-sm sm:text-base truncate">{p.name}</div>
+                <div className="text-xl font-extrabold text-blue-600 mt-1">{fmt$(p.price)}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {cartCount > 0 && (
+        <button onClick={onCheckout} className="fixed bottom-24 left-4 right-4 sm:left-auto sm:right-6 sm:w-auto z-30 bg-emerald-500 hover:bg-emerald-600 text-white rounded-3xl shadow-xl shadow-emerald-500/40 p-5 flex items-center justify-between gap-4 active:scale-95 transition-all">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 rounded-2xl p-2"><ShoppingCart className="w-6 h-6" /></div>
+            <div className="text-left">
+              <div className="text-xs opacity-90 font-semibold">{cartCount} {cartCount === 1 ? 'item' : 'items'} in cart</div>
+              <div className="text-xl font-extrabold">Checkout • {fmt$(cartTotal)}</div>
+            </div>
+          </div>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CheckoutModal({ open, onClose, data, cart, setCart, onComplete }) {
+  const [stage, setStage] = useState('cart');
+  const [cashStr, setCashStr] = useState('');
+  useEffect(() => { if (open) { setStage('cart'); setCashStr(''); } }, [open]);
+  const cartItems = cart.map(c => { const p = data.products.find(x => x.id === c.productId); return p ? { ...p, qty: c.qty } : null; }).filter(Boolean);
+  const total = cartItems.reduce((s, i) => s + i.price * i.qty, 0);
+  const cash = parseInt(cashStr || '0', 10);
+  const change = cash - total;
+  const setQty = (productId, qty) => setCart(prev => qty <= 0 ? prev.filter(c => c.productId !== productId) : prev.map(c => c.productId === productId ? { ...c, qty } : c));
+  const tap = (key) => { if (key === 'C') setCashStr(''); else if (key === '⌫') setCashStr(s => s.slice(0, -1)); else if (cashStr.length < 5) setCashStr(s => (s === '0' ? key : s + key)); };
+  const exact = () => setCashStr(String(total));
+  const finishSale = () => { onComplete(cartItems, total, cash, change); setStage('done'); setTimeout(() => onClose(), 1800); };
+  return (
+    <Modal open={open} onClose={onClose} title={stage === 'cart' ? 'Your Cart' : stage === 'pay' ? 'Get Paid' : 'Done!'} maxW="max-w-md">
+      {stage === 'cart' && (<>
+        {cartItems.length === 0 ? (
+          <div className="text-center py-12 text-slate-500"><ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-40" /><p>Cart is empty</p></div>
+        ) : (
+          <div className="space-y-3">
+            {cartItems.map(item => (
+              <div key={item.id} className="flex items-center gap-3 bg-slate-50 rounded-2xl p-3">
+                <div className="w-16 h-16 rounded-xl bg-slate-200 overflow-hidden flex-shrink-0">{item.photo ? <img src={item.photo} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-2xl">📦</div>}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-slate-900 truncate">{item.name}</div>
+                  <div className="text-blue-600 font-bold">{fmt$(item.price)} each</div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setQty(item.id, item.qty - 1)} className="w-9 h-9 rounded-lg bg-white border-2 border-slate-200 flex items-center justify-center active:scale-95"><Minus className="w-4 h-4" /></button>
+                  <div className="w-8 text-center font-bold text-lg">{item.qty}</div>
+                  <button onClick={() => item.qty < item.stock && setQty(item.id, item.qty + 1)} disabled={item.qty >= item.stock} className="w-9 h-9 rounded-lg bg-white border-2 border-slate-200 flex items-center justify-center active:scale-95 disabled:opacity-30"><Plus className="w-4 h-4" /></button>
+                </div>
+              </div>
+            ))}
+            <div className="border-t-2 border-dashed border-slate-200 pt-3 mt-4 flex items-center justify-between">
+              <span className="text-lg font-semibold text-slate-700">Total</span>
+              <span className="text-3xl font-extrabold text-blue-600">{fmt$(total)}</span>
+            </div>
+          </div>
+        )}
+        {cartItems.length > 0 && <div className="mt-5"><Btn variant="success" size="xl" className="w-full" onClick={() => setStage('pay')}><Wallet className="w-6 h-6" /> Get Paid {fmt$(total)}</Btn></div>}
+      </>)}
+      {stage === 'pay' && (
+        <div>
+          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-3xl p-5 text-white shadow-lg mb-4">
+            <div className="text-sm font-semibold opacity-90">Total to charge</div>
+            <div className="text-5xl font-extrabold mt-1">{fmt$(total)}</div>
+          </div>
+          <div className="bg-slate-50 rounded-2xl p-4 mb-3 flex items-center justify-between">
+            <span className="text-slate-600 font-semibold">Customer gives</span>
+            <span className="text-3xl font-bold text-slate-900">{cashStr ? fmt$(cash) : '$ —'}</span>
+          </div>
+          <div className={`rounded-2xl p-4 mb-4 flex items-center justify-between ${change < 0 ? 'bg-amber-50' : 'bg-emerald-50'}`}>
+            <span className="text-sm font-bold uppercase tracking-wide">{!cashStr ? <span className="text-slate-500">Change</span> : change < 0 ? <span className="text-amber-700">Need more</span> : change === 0 ? <span className="text-emerald-700">No change!</span> : <span className="text-emerald-700">Give back</span>}</span>
+            <span className={`text-4xl font-extrabold ${change < 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{!cashStr ? '$ —' : change < 0 ? fmt$(-change) : fmt$(change)}</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {['1','2','3','4','5','6','7','8','9','C','0','⌫'].map(k => (
+              <button key={k} onClick={() => tap(k)} className={`h-16 rounded-2xl text-2xl font-bold active:scale-95 transition-all ${k === 'C' || k === '⌫' ? 'bg-slate-200 text-slate-700' : 'bg-white border-2 border-slate-200 text-slate-900 hover:border-blue-300'}`}>{k}</button>
+            ))}
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Btn variant="ghost" onClick={exact}>Exact ({fmt$(total)})</Btn>
+            <Btn variant="ghost" onClick={() => setStage('cart')}>← Back to cart</Btn>
+          </div>
+          <Btn variant="success" size="xl" className="w-full mt-4" disabled={cash < total} onClick={finishSale}><Check className="w-6 h-6" /> Done! Sale Complete</Btn>
+        </div>
+      )}
+      {stage === 'done' && (
+        <div className="text-center py-10">
+          <div className="w-24 h-24 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4 animate-bounce-in"><Check className="w-12 h-12 text-emerald-600" strokeWidth={3} /></div>
+          <h3 className="text-3xl font-extrabold text-slate-900 mb-2">Nice sale! 🎉</h3>
+          <p className="text-slate-600 text-lg">{fmt$(total)} added to your money</p>
+          {change > 0 && <p className="text-slate-500 mt-2">Give back {fmt$(change)} in change</p>}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ===== PRINTS =====
+function PrintsScreen({ data, update }) {
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [printingId, setPrintingId] = useState(null);
+  const saveProduct = (product) => {
+    update(prev => editing ? { ...prev, products: prev.products.map(p => p.id === editing.id ? { ...product, id: editing.id, stock: editing.stock } : p) } : { ...prev, products: [...prev.products, { ...product, id: uid('prod'), stock: 0 }] });
+    setShowForm(false); setEditing(null);
+  };
+  const deleteProduct = (id) => { if (confirm('Delete this print? This cannot be undone.')) update(prev => ({ ...prev, products: prev.products.filter(p => p.id !== id) })); };
+  const printMore = (productId, qty) => {
+    update(prev => {
+      const product = prev.products.find(p => p.id === productId);
+      const newFilaments = prev.filaments.map(f => { const usage = product.bom.find(b => b.filamentId === f.id); return usage ? { ...f, currentG: Math.max(0, f.currentG - usage.gramsPerUnit * qty) } : f; });
+      const newProducts = prev.products.map(p => p.id === productId ? { ...p, stock: p.stock + qty } : p);
+      return { ...prev, filaments: newFilaments, products: newProducts };
+    });
+    setPrintingId(null);
+  };
+  return (
+    <div className="p-4 pb-32">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-2xl font-bold text-slate-900">My Prints</h2>
+        <Btn variant="primary" onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="w-5 h-5" /> Add Print</Btn>
+      </div>
+      {data.products.length === 0 ? (
+        <div className="text-center py-16 px-4">
+          <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4"><Package className="w-10 h-10 text-blue-500" /></div>
+          <h3 className="text-xl font-bold text-slate-900 mb-2">No prints yet</h3>
+          <p className="text-slate-600 mb-4">Add your first 3D print!</p>
+          <Btn variant="primary" size="lg" onClick={() => setShowForm(true)}><Plus className="w-5 h-5" /> Add a Print</Btn>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {data.products.map(p => (
+            <div key={p.id} className="bg-white rounded-3xl shadow-sm overflow-hidden">
+              <div className="aspect-video bg-slate-100 relative">
+                {p.photo ? <img src={p.photo} alt={p.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-5xl">📦</div>}
+                <div className={`absolute top-2 right-2 rounded-full px-3 py-1 text-sm font-bold shadow-sm ${p.stock === 0 ? 'bg-red-500 text-white' : p.stock < 3 ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'}`}>{p.stock} in stock</div>
+              </div>
+              <div className="p-4">
+                <div className="font-bold text-slate-900 text-lg">{p.name}</div>
+                <div className="text-xl font-extrabold text-blue-600">{fmt$(p.price)}</div>
+                <div className="text-xs text-slate-500 my-2">Recipe: {p.bom.length === 0 ? 'No filament' : p.bom.map(b => { const f = data.filaments.find(x => x.id === b.filamentId); return f ? `${f.name.split(' ').slice(-1)[0]} ${b.gramsPerUnit}g` : null; }).filter(Boolean).join(' + ')}</div>
+                <div className="flex gap-2">
+                  <Btn variant="success" size="sm" className="flex-1" onClick={() => setPrintingId(p.id)} disabled={p.bom.length === 0}><Printer className="w-4 h-4" /> Print More</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => { setEditing(p); setShowForm(true); }}><Pencil className="w-4 h-4" /></Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => deleteProduct(p.id)}><Trash2 className="w-4 h-4 text-red-500" /></Btn>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <ProductFormModal open={showForm} onClose={() => { setShowForm(false); setEditing(null); }} onSave={saveProduct} editing={editing} filaments={data.filaments} />
+      <PrintMoreModal open={!!printingId} onClose={() => setPrintingId(null)} product={data.products.find(p => p.id === printingId)} filaments={data.filaments} onPrint={printMore} />
+    </div>
+  );
+}
+
+function ProductFormModal({ open, onClose, onSave, editing, filaments }) {
+  const [name, setName] = useState('');
+  const [photo, setPhoto] = useState('');
+  const [price, setPrice] = useState('');
+  const [bom, setBom] = useState({});
+  useEffect(() => {
+    if (open) {
+      setName(editing?.name || ''); setPhoto(editing?.photo || ''); setPrice(editing?.price ? String(editing.price) : '');
+      const initBom = {}; (editing?.bom || []).forEach(b => { initBom[b.filamentId] = String(b.gramsPerUnit); });
+      setBom(initBom);
+    }
+  }, [open, editing]);
+  const valid = name.trim() && parseInt(price, 10) > 0;
+  const bomEntries = Object.entries(bom).filter(([_, v]) => parseFloat(v) > 0);
+  const handleSave = () => onSave({ name: name.trim(), photo, price: parseInt(price, 10), bom: bomEntries.map(([filamentId, g]) => ({ filamentId, gramsPerUnit: parseFloat(g) })) });
+  return (
+    <Modal open={open} onClose={onClose} title={editing ? 'Edit Print' : 'New Print'} maxW="max-w-lg" footer={<Btn variant="success" size="lg" className="w-full" disabled={!valid} onClick={handleSave}><Check className="w-5 h-5" /> {editing ? 'Save Changes' : 'Add Print'}</Btn>}>
+      <PhotoPicker photo={photo} onChange={setPhoto} />
+      <Input label="Name" value={name} onChange={setName} placeholder="Mini Dragon" />
+      <Input label="Price" value={price} onChange={(v) => setPrice(v.replace(/[^\d]/g,''))} type="number" placeholder="5" prefix="$" hint="Whole dollars only" />
+      <div className="mt-2">
+        <label className="block text-sm font-semibold text-slate-700 mb-2">Recipe — what filament does it use?</label>
+        <p className="text-xs text-slate-500 mb-3">Type the grams used per print. Leave blank if not used.</p>
+        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+          {filaments.length === 0 && <p className="text-sm text-slate-400 text-center py-4">No filaments yet</p>}
+          {filaments.map(f => (
+            <div key={f.id} className="flex items-center gap-3 bg-slate-50 rounded-2xl p-3">
+              <div className="w-10 h-10 rounded-xl border-2 border-slate-200 flex-shrink-0" style={{ backgroundColor: f.colorHex }} />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-slate-900 text-sm truncate">{f.name}</div>
+                <div className="text-xs text-slate-500">{f.brand}</div>
+              </div>
+              <div className="relative w-24">
+                <input type="number" inputMode="decimal" value={bom[f.id] || ''} onChange={e => setBom(prev => ({ ...prev, [f.id]: e.target.value }))} placeholder="0" className="w-full px-3 py-2 pr-10 text-base border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:outline-none" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">g</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function PrintMoreModal({ open, onClose, product, filaments, onPrint }) {
+  const [qty, setQty] = useState(1);
+  useEffect(() => { if (open) setQty(1); }, [open]);
+  if (!product) return null;
+  const usage = product.bom.map(b => { const f = filaments.find(x => x.id === b.filamentId); if (!f) return null; const needed = b.gramsPerUnit * qty; return { filament: f, needed, enough: f.currentG >= needed }; }).filter(Boolean);
+  const canPrint = usage.length > 0 && usage.every(u => u.enough);
+  return (
+    <Modal open={open} onClose={onClose} title="Print More" maxW="max-w-md" footer={<Btn variant="success" size="lg" className="w-full" disabled={!canPrint} onClick={() => onPrint(product.id, qty)}><Printer className="w-5 h-5" /> Print {qty} {product.name}</Btn>}>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-20 h-20 rounded-2xl bg-slate-100 overflow-hidden flex-shrink-0">{product.photo ? <img src={product.photo} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-3xl">📦</div>}</div>
+        <div>
+          <div className="text-xl font-bold text-slate-900">{product.name}</div>
+          <div className="text-sm text-slate-500">Currently: {product.stock} in stock</div>
+        </div>
+      </div>
+      <label className="block text-sm font-semibold text-slate-700 mb-2">How many to print?</label>
+      <NumberStepper value={qty} onChange={setQty} min={1} max={99} />
+      <div className="mt-5">
+        <div className="text-sm font-semibold text-slate-700 mb-2">This will use:</div>
+        <div className="space-y-2">
+          {usage.map(u => (
+            <div key={u.filament.id} className={`flex items-center gap-3 rounded-2xl p-3 ${u.enough ? 'bg-emerald-50' : 'bg-red-50'}`}>
+              <div className="w-8 h-8 rounded-lg border-2 border-white flex-shrink-0 shadow" style={{ backgroundColor: u.filament.colorHex }} />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-slate-900 text-sm truncate">{u.filament.name}</div>
+                <div className="text-xs text-slate-600">{fmtG(u.needed)} of {fmtG(u.filament.currentG)} available</div>
+              </div>
+              {u.enough ? <Check className="w-5 h-5 text-emerald-600" strokeWidth={3} /> : <AlertTriangle className="w-5 h-5 text-red-600" />}
+            </div>
+          ))}
+        </div>
+        {!canPrint && usage.length > 0 && <div className="mt-3 bg-red-50 border-2 border-red-200 rounded-2xl p-3 text-sm text-red-700 font-semibold flex items-start gap-2"><AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" /><span>Not enough filament! Restock or print fewer.</span></div>}
+      </div>
+    </Modal>
+  );
+}
+
+// ===== FILAMENTS =====
+function FilamentsScreen({ data, update }) {
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [restockId, setRestockId] = useState(null);
+  const saveFilament = (fil) => {
+    update(prev => editing ? { ...prev, filaments: prev.filaments.map(f => f.id === editing.id ? { ...fil, id: editing.id, currentG: editing.currentG } : f) } : { ...prev, filaments: [...prev.filaments, { ...fil, id: uid('fil'), currentG: fil.spoolSizeG }] });
+    setShowForm(false); setEditing(null);
+  };
+  const deleteFilament = (id) => {
+    const usedIn = data.products.filter(p => p.bom.some(b => b.filamentId === id));
+    const msg = usedIn.length > 0 ? `Delete this filament? It's used in ${usedIn.length} print${usedIn.length > 1 ? 's' : ''}.` : 'Delete this filament?';
+    if (confirm(msg)) update(prev => ({ ...prev, filaments: prev.filaments.filter(f => f.id !== id) }));
+  };
+  const restock = (id, gramsAdded, costPaid) => {
+    update(prev => ({ ...prev, filaments: prev.filaments.map(f => f.id === id ? { ...f, currentG: f.currentG + gramsAdded } : f), transactions: costPaid > 0 ? [{ id: uid('tx'), type: 'restock', amount: -costPaid, description: `Restocked ${prev.filaments.find(f => f.id === id)?.name} (+${fmtG(gramsAdded)})`, date: Date.now() }, ...prev.transactions] : prev.transactions }));
+    setRestockId(null);
+  };
+  return (
+    <div className="p-4 pb-32">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-2xl font-bold text-slate-900">My Filaments</h2>
+        <Btn variant="primary" onClick={() => { setEditing(null); setShowForm(true); }}><Plus className="w-5 h-5" /> Add</Btn>
+      </div>
+      <div className="space-y-3">
+        {data.filaments.map(f => {
+          const pct = Math.min(100, (f.currentG / f.spoolSizeG) * 100);
+          const low = pct < 15;
+          const empty = f.currentG <= 0;
+          return (
+            <div key={f.id} className={`bg-white rounded-3xl shadow-sm overflow-hidden ${low ? 'ring-2 ring-amber-300' : ''}`}>
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-14 h-14 rounded-2xl border-4 border-white shadow-md flex-shrink-0" style={{ backgroundColor: f.colorHex }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-slate-900 text-lg truncate">{f.name}</div>
+                    <div className="text-xs text-slate-500">{f.brand} • {f.type}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-extrabold text-slate-900">{Math.round(pct)}%</div>
+                    <div className="text-xs text-slate-500">{fmtG(f.currentG)} / {fmtG(f.spoolSizeG)}</div>
+                  </div>
+                </div>
+                <ProgressBar pct={pct} color={empty ? '#EF4444' : low ? '#F59E0B' : f.colorHex === '#F9FAFB' || f.colorHex === '#F0EDE5' || f.colorHex === '#F5F5F5' ? '#94A3B8' : f.colorHex} />
+                {low && <div className="mt-2 text-xs text-amber-700 font-semibold flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {empty ? 'Empty! Time to restock.' : 'Running low — restock soon!'}</div>}
+                <div className="flex gap-2 mt-3">
+                  <Btn variant="success" size="sm" className="flex-1" onClick={() => setRestockId(f.id)}><RefreshCw className="w-4 h-4" /> Restock</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => { setEditing(f); setShowForm(true); }}><Pencil className="w-4 h-4" /></Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => deleteFilament(f.id)}><Trash2 className="w-4 h-4 text-red-500" /></Btn>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <FilamentFormModal open={showForm} onClose={() => { setShowForm(false); setEditing(null); }} onSave={saveFilament} editing={editing} />
+      <RestockModal open={!!restockId} onClose={() => setRestockId(null)} filament={data.filaments.find(f => f.id === restockId)} onRestock={restock} />
+    </div>
+  );
+}
+
+function FilamentFormModal({ open, onClose, onSave, editing }) {
+  const [name, setName] = useState('');
+  const [brand, setBrand] = useState('');
+  const [type, setType] = useState('PLA');
+  const [colorHex, setColorHex] = useState('#3B82F6');
+  const [spoolSize, setSpoolSize] = useState('1000');
+  const [cost, setCost] = useState('25');
+  useEffect(() => { if (open) { setName(editing?.name || ''); setBrand(editing?.brand || 'Bambu Lab'); setType(editing?.type || 'PLA'); setColorHex(editing?.colorHex || '#3B82F6'); setSpoolSize(editing?.spoolSizeG ? String(editing.spoolSizeG) : '1000'); setCost(editing?.costPerSpool ? String(editing.costPerSpool) : '25'); } }, [open, editing]);
+  const valid = name.trim() && parseInt(spoolSize, 10) > 0;
+  const handleSave = () => onSave({ name: name.trim(), brand: brand.trim(), type, colorHex, spoolSizeG: parseInt(spoolSize, 10), costPerSpool: parseInt(cost, 10) || 0 });
+  return (
+    <Modal open={open} onClose={onClose} title={editing ? 'Edit Filament' : 'New Filament'} footer={<Btn variant="success" size="lg" className="w-full" disabled={!valid} onClick={handleSave}><Check className="w-5 h-5" /> {editing ? 'Save Changes' : 'Add Filament'}</Btn>}>
+      <div className="mb-4">
+        <label className="block text-sm font-semibold text-slate-700 mb-2">Color</label>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {COLOR_PRESETS.map(c => (
+            <button key={c} type="button" onClick={() => setColorHex(c)} className={`w-12 h-12 rounded-2xl border-4 transition-all ${colorHex === c ? 'border-blue-500 scale-110' : 'border-white shadow-md'}`} style={{ backgroundColor: c }}>
+              {colorHex === c && <Check className={`w-5 h-5 mx-auto ${isLight(c) ? 'text-slate-700' : 'text-white'}`} strokeWidth={3} />}
+            </button>
+          ))}
+          <label className="w-12 h-12 rounded-2xl border-4 border-white shadow-md cursor-pointer overflow-hidden relative" style={{ backgroundColor: colorHex }}>
+            <input type="color" value={colorHex} onChange={e => setColorHex(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
+            <Wand2 className={`w-5 h-5 mx-auto mt-2.5 ${isLight(colorHex) ? 'text-slate-700' : 'text-white'}`} />
+          </label>
+        </div>
+      </div>
+      <Input label="Name" value={name} onChange={setName} placeholder="PLA Basic Red" />
+      <Input label="Brand" value={brand} onChange={setBrand} placeholder="Bambu Lab" />
+      <div className="mb-4">
+        <label className="block text-sm font-semibold text-slate-700 mb-2">Type</label>
+        <div className="flex flex-wrap gap-2">
+          {FILAMENT_TYPES.map(t => <button key={t} type="button" onClick={() => setType(t)} className={`px-4 py-2 rounded-xl font-semibold text-sm transition-colors ${type === t ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{t}</button>)}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Input label="Spool size" value={spoolSize} onChange={(v) => setSpoolSize(v.replace(/[^\d]/g,''))} type="number" suffix="g" />
+        <Input label="Cost per spool" value={cost} onChange={(v) => setCost(v.replace(/[^\d]/g,''))} type="number" prefix="$" />
+      </div>
+    </Modal>
+  );
+}
+
+function RestockModal({ open, onClose, filament, onRestock }) {
+  const [grams, setGrams] = useState('');
+  const [cost, setCost] = useState('');
+  useEffect(() => { if (open && filament) { setGrams(String(filament.spoolSizeG)); setCost(String(filament.costPerSpool || 0)); } }, [open, filament]);
+  if (!filament) return null;
+  const gNum = parseInt(grams || '0', 10);
+  const cNum = parseInt(cost || '0', 10);
+  const valid = gNum > 0;
+  return (
+    <Modal open={open} onClose={onClose} title="Restock Filament" maxW="max-w-md" footer={<Btn variant="success" size="lg" className="w-full" disabled={!valid} onClick={() => onRestock(filament.id, gNum, cNum)}><Check className="w-5 h-5" /> Add {fmtG(gNum)} • Spend {fmt$(cNum)}</Btn>}>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-14 h-14 rounded-2xl border-4 border-white shadow-md" style={{ backgroundColor: filament.colorHex }} />
+        <div>
+          <div className="font-bold text-slate-900 text-lg">{filament.name}</div>
+          <div className="text-sm text-slate-500">Currently {fmtG(filament.currentG)} ({Math.round(filament.currentG / filament.spoolSizeG * 100)}%)</div>
+        </div>
+      </div>
+      <Input label="How many grams did you buy?" value={grams} onChange={(v) => setGrams(v.replace(/[^\d]/g,''))} type="number" suffix="g" />
+      <Input label="How much did it cost?" value={cost} onChange={(v) => setCost(v.replace(/[^\d]/g,''))} type="number" prefix="$" hint="This will be tracked as an expense in My Money" />
+      <div className="bg-blue-50 rounded-2xl p-3 text-sm text-blue-900">After restocking: <b>{fmtG(filament.currentG + gNum)}</b> total ({Math.round((filament.currentG + gNum) / filament.spoolSizeG * 100)}%)</div>
+    </Modal>
+  );
+}
+
+// ===== MONEY =====
+function MoneyScreen({ data, update }) {
+  const [showManual, setShowManual] = useState(false);
+  const balance = data.settings.startingBalance + data.transactions.reduce((s, t) => s + t.amount, 0);
+  const sales = data.transactions.filter(t => t.type === 'sale').reduce((s, t) => s + t.amount, 0);
+  const expenses = data.transactions.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+  const profit = sales + expenses;
+  const addManual = (amount, description) => { update(prev => ({ ...prev, transactions: [{ id: uid('tx'), type: 'manual', amount, description, date: Date.now() }, ...prev.transactions] })); setShowManual(false); };
+  const deleteTx = (id) => { if (confirm('Delete this transaction? Your balance will change.')) update(prev => ({ ...prev, transactions: prev.transactions.filter(t => t.id !== id) })); };
+  return (
+    <div className="p-4 pb-32">
+      <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-3xl p-6 text-white shadow-xl shadow-emerald-500/30 mb-4">
+        <div className="text-sm font-semibold opacity-90">Bank balance</div>
+        <div className="text-5xl font-extrabold mt-1">{fmt$(balance)}</div>
+        <div className="text-xs opacity-75 mt-2">Started with {fmt$(data.settings.startingBalance)}</div>
+      </div>
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="bg-white rounded-2xl p-3 shadow-sm">
+          <div className="flex items-center gap-1 text-emerald-600 mb-1"><TrendingUp className="w-4 h-4" /><div className="text-xs font-semibold uppercase">Sales</div></div>
+          <div className="text-xl font-extrabold text-slate-900">{fmt$(sales)}</div>
+        </div>
+        <div className="bg-white rounded-2xl p-3 shadow-sm">
+          <div className="flex items-center gap-1 text-red-500 mb-1"><TrendingDown className="w-4 h-4" /><div className="text-xs font-semibold uppercase">Spent</div></div>
+          <div className="text-xl font-extrabold text-slate-900">{fmt$(-expenses)}</div>
+        </div>
+        <div className="bg-white rounded-2xl p-3 shadow-sm">
+          <div className="flex items-center gap-1 text-blue-600 mb-1"><Sparkles className="w-4 h-4" /><div className="text-xs font-semibold uppercase">Profit</div></div>
+          <div className={`text-xl font-extrabold ${profit >= 0 ? 'text-slate-900' : 'text-red-500'}`}>{fmt$(profit)}</div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-lg font-bold text-slate-900">Transactions</h3>
+        <Btn variant="primary" size="sm" onClick={() => setShowManual(true)}><Plus className="w-4 h-4" /> Add Entry</Btn>
+      </div>
+      {data.transactions.length === 0 ? (
+        <div className="text-center py-12 text-slate-500 bg-white rounded-3xl">
+          <Receipt className="w-12 h-12 mx-auto mb-2 opacity-40" />
+          <p>No transactions yet</p>
+          <p className="text-sm mt-1">Sales and restocks will show up here.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-3xl shadow-sm overflow-hidden divide-y divide-slate-100">
+          {data.transactions.map(t => {
+            const date = new Date(t.date);
+            const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            const timeStr = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+            return (
+              <div key={t.id} className="p-4 flex items-center gap-3 hover:bg-slate-50 group">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${t.amount >= 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                  {t.type === 'sale' ? <ShoppingCart className="w-5 h-5" /> : t.type === 'restock' ? <Boxes className="w-5 h-5" /> : t.amount >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-900 truncate">{t.description}</div>
+                  <div className="text-xs text-slate-500">{dateStr} • {timeStr}</div>
+                </div>
+                <div className={`text-lg font-extrabold ${t.amount >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{t.amount >= 0 ? '+' : ''}{fmt$(t.amount)}</div>
+                <button onClick={() => deleteTx(t.id)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-50 rounded"><X className="w-4 h-4 text-red-400" /></button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <ManualTxModal open={showManual} onClose={() => setShowManual(false)} onSave={addManual} />
+    </div>
+  );
+}
+
+function ManualTxModal({ open, onClose, onSave }) {
+  const [kind, setKind] = useState('in');
+  const [amount, setAmount] = useState('');
+  const [desc, setDesc] = useState('');
+  useEffect(() => { if (open) { setKind('in'); setAmount(''); setDesc(''); } }, [open]);
+  const valid = parseInt(amount, 10) > 0 && desc.trim();
+  const handleSave = () => onSave(parseInt(amount, 10) * (kind === 'in' ? 1 : -1), desc.trim());
+  return (
+    <Modal open={open} onClose={onClose} title="Add Money Entry" maxW="max-w-md" footer={<Btn variant="success" size="lg" className="w-full" disabled={!valid} onClick={handleSave}><Check className="w-5 h-5" /> Add Entry</Btn>}>
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button onClick={() => setKind('in')} className={`p-4 rounded-2xl font-bold transition-all ${kind === 'in' ? 'bg-emerald-500 text-white shadow-md' : 'bg-slate-100 text-slate-700'}`}><TrendingUp className="w-5 h-5 mx-auto mb-1" />Money In</button>
+        <button onClick={() => setKind('out')} className={`p-4 rounded-2xl font-bold transition-all ${kind === 'out' ? 'bg-red-500 text-white shadow-md' : 'bg-slate-100 text-slate-700'}`}><TrendingDown className="w-5 h-5 mx-auto mb-1" />Money Out</button>
+      </div>
+      <Input label="Amount" value={amount} onChange={(v) => setAmount(v.replace(/[^\d]/g,''))} type="number" prefix="$" autoFocus />
+      <Input label="What's it for?" value={desc} onChange={setDesc} placeholder={kind === 'in' ? 'Birthday money' : 'Bought ice cream'} />
+    </Modal>
+  );
+}
+
+// ===== SETTINGS =====
+function SettingsScreen({ data, update, onReset }) {
+  const [shopName, setShopName] = useState(data.settings.shopName);
+  const [startBal, setStartBal] = useState(String(data.settings.startingBalance));
+  const saveSettings = () => { update(prev => ({ ...prev, settings: { ...prev.settings, shopName: shopName.trim() || 'My Print Shop', startingBalance: parseInt(startBal, 10) || 0 } })); alert('Settings saved!'); };
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `print-shop-${new Date().toISOString().slice(0,10)}.json`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+  return (
+    <div className="p-4 pb-32 max-w-lg mx-auto">
+      <h2 className="text-2xl font-bold text-slate-900 mb-4">Settings</h2>
+      <div className="bg-white rounded-3xl shadow-sm p-5 mb-4">
+        <h3 className="text-lg font-bold text-slate-900 mb-3">Shop</h3>
+        <Input label="Shop name" value={shopName} onChange={setShopName} />
+        <Input label="Starting balance" value={startBal} onChange={(v) => setStartBal(v.replace(/[^\d]/g,''))} type="number" prefix="$" hint="Money you had before opening shop" />
+        <Btn variant="success" className="w-full" onClick={saveSettings}><Check className="w-5 h-5" /> Save</Btn>
+      </div>
+      <div className="bg-white rounded-3xl shadow-sm p-5 mb-4">
+        <h3 className="text-lg font-bold text-slate-900 mb-3">Backup</h3>
+        <p className="text-sm text-slate-600 mb-3">Save a copy of all your shop data.</p>
+        <Btn variant="outline" className="w-full" onClick={exportData}><Receipt className="w-5 h-5" /> Download Backup</Btn>
+      </div>
+      <div className="bg-red-50 border-2 border-red-100 rounded-3xl p-5">
+        <h3 className="text-lg font-bold text-red-900 mb-2">Danger Zone</h3>
+        <p className="text-sm text-red-700 mb-3">This deletes all filaments, prints, sales, and money history.</p>
+        <Btn variant="danger" className="w-full" onClick={onReset}><Trash2 className="w-5 h-5" /> Reset Everything</Btn>
+      </div>
+      <div className="text-center mt-8 text-xs text-slate-400">Made with ❤️ for makers</div>
+    </div>
+  );
+}
+
+// ===== MAIN APP =====
+function App() {
+  const [data, setData] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+  const [tab, setTab] = useState('sell');
+  const [cart, setCart] = useState([]);
+  const [showCheckout, setShowCheckout] = useState(false);
+
+  useEffect(() => {
+    const saved = store.get(STORAGE_KEY);
+    setData(saved || createSeed());
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!loaded || !data) return;
+    store.set(STORAGE_KEY, data);
+  }, [data, loaded]);
+
+  const update = (fn) => setData(prev => fn(prev));
+
+  const completeSale = (items, total) => {
+    const summary = items.length === 1 ? `Sold ${items[0].qty}× ${items[0].name}` : `Sold ${items.reduce((s, i) => s + i.qty, 0)} items`;
+    update(prev => ({
+      ...prev,
+      products: prev.products.map(p => { const item = items.find(i => i.id === p.id); return item ? { ...p, stock: Math.max(0, p.stock - item.qty) } : p; }),
+      transactions: [{ id: uid('tx'), type: 'sale', amount: total, description: summary, date: Date.now() }, ...prev.transactions]
+    }));
+    setCart([]);
+  };
+
+  const reset = () => { if (confirm('Reset EVERYTHING? This will delete all your data and start fresh.')) { if (confirm('Are you really sure? This cannot be undone.')) { setData(createSeed()); setCart([]); } } };
+
+  if (!loaded || !data) return (<div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="text-center"><div className="spinner mx-auto mb-3"></div><div className="text-slate-600 font-semibold">Loading your shop…</div></div></div>);
+
+  const tabs = [
+    { id: 'sell', label: 'Sell', icon: ShoppingCart, emoji: '🛒' },
+    { id: 'prints', label: 'Prints', icon: Package, emoji: '📦' },
+    { id: 'filaments', label: 'Filament', icon: Layers, emoji: '🧵' },
+    { id: 'money', label: 'Money', icon: Wallet, emoji: '💰' },
+    { id: 'settings', label: 'Settings', icon: SettingsIcon, emoji: '⚙️' }
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+        <div>
+          <div className="text-xs text-slate-500 font-semibold uppercase tracking-wide">{tabs.find(t => t.id === tab)?.emoji} {tabs.find(t => t.id === tab)?.label}</div>
+          <div className="text-lg font-extrabold text-slate-900">{data.settings.shopName}</div>
+        </div>
+        {tab === 'sell' && (
+          <div className="text-right">
+            <div className="text-xs text-slate-500">Today</div>
+            <div className="text-sm font-bold text-emerald-600">{fmt$(data.transactions.filter(t => t.type === 'sale' && new Date(t.date).toDateString() === new Date().toDateString()).reduce((s, t) => s + t.amount, 0))}</div>
+          </div>
+        )}
+      </header>
+      <main className="flex-1">
+        {tab === 'sell' && <SellScreen data={data} cart={cart} setCart={setCart} onCheckout={() => setShowCheckout(true)} />}
+        {tab === 'prints' && <PrintsScreen data={data} update={update} />}
+        {tab === 'filaments' && <FilamentsScreen data={data} update={update} />}
+        {tab === 'money' && <MoneyScreen data={data} update={update} />}
+        {tab === 'settings' && <SettingsScreen data={data} update={update} onReset={reset} />}
+      </main>
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-lg z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="flex max-w-2xl mx-auto">
+          {tabs.map(t => {
+            const TabIcon = t.icon;
+            const active = tab === t.id;
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)} className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors ${active ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                <div className={`w-12 h-8 rounded-2xl flex items-center justify-center transition-all ${active ? 'bg-blue-100' : ''}`}><TabIcon className="w-5 h-5" /></div>
+                <span className="text-xs font-bold">{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+      <CheckoutModal open={showCheckout} onClose={() => setShowCheckout(false)} data={data} cart={cart} setCart={setCart} onComplete={completeSale} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
